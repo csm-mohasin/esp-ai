@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Knowledge Admin</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --card: #ffffff; --ink: #151a24; --muted: #66708a; --line: #dde2ee;
+    --accent: #2563eb; --accent-ink: #ffffff; --danger: #d62d3b; --ok: #14864a; --warn: #b7791f;
+    --field: #f8f9fc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1117; --card: #171b24; --ink: #e8ecf5; --muted: #8e99b3; --line: #2a3040;
+      --accent: #5b8cff; --accent-ink: #0b1020; --danger: #ff6b76; --ok: #4cc58a; --warn: #f0b95a;
+      --field: #11151d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1117; --card: #171b24; --ink: #e8ecf5; --muted: #8e99b3; --line: #2a3040;
+    --accent: #5b8cff; --accent-ink: #0b1020; --danger: #ff6b76; --ok: #4cc58a; --warn: #f0b95a;
+    --field: #11151d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Bengali", sans-serif;
+    padding: 20px 16px 60px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, textarea {
+    width: 100%; padding: 10px 12px; font: inherit; color: var(--ink);
+    background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; padding: 9px 16px;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  button.danger { color: var(--danger); }
+  button.small { padding: 5px 10px; font-size: 13px; font-weight: 500; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+  .msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
+  .msg.err { color: var(--danger); } .msg.ok { color: var(--ok); }
+  .meter { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+  .meter > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .25s, background .25s; }
+  .meter.warn > i { background: var(--warn); } .meter.full > i { background: var(--danger); }
+  .stats { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .entry { border-top: 1px solid var(--line); padding: 12px 0; }
+  .entry:first-child { border-top: 0; }
+  .entry h3 { margin: 0 0 2px; font-size: 16px; }
+  .entry p { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .entry .bytes { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+  .hidden { display: none !important; }
+  .count { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- লগইন -->
+  <section id="loginView" class="hidden">
+    <div class="top"><div><h1>AI Knowledge Admin</h1><p class="sub">অ্যাডমিন অ্যাকাউন্টে লগইন করো</p></div></div>
+    <form class="card" id="loginForm">
+      <label for="email">ইমেইল</label>
+      <input id="email" type="email" autocomplete="username" required>
+      <label for="pass">পাসওয়ার্ড</label>
+      <input id="pass" type="password" autocomplete="current-password" required>
+      <div class="row" style="margin-top:14px"><button class="primary" id="loginBtn" type="submit">লগইন</button></div>
+      <div class="msg" id="loginMsg"></div>
+    </form>
+  </section>
+
+  <!-- ড্যাশবোর্ড -->
+  <section id="appView" class="hidden">
+    <div class="top">
+      <div><h1>AI Knowledge Admin</h1><p class="sub" id="who"></p></div>
+      <button class="small" id="logoutBtn" type="button">লগআউট</button>
+    </div>
+
+    <div class="card">
+      <div class="stats"><span id="usedText">0 / 8000 বাইট</span><span id="countText">0টি তথ্য</span></div>
+      <div class="meter" id="meter"><i></i></div>
+      <div class="sub" style="margin-top:8px">বাংলা অক্ষর প্রায় ৩ বাইট নেয়। সীমা পেরোলে AI শেষের তথ্যগুলো পাবে না।</div>
+    </div>
+
+    <form class="card" id="entryForm">
+      <h2 style="font-size:17px;margin:0 0 4px" id="formTitle">নতুন তথ্য যোগ করো</h2>
+      <label for="t">শিরোনাম (ছোট, ঐচ্ছিক)</label>
+      <input id="t" maxlength="80" placeholder="যেমন: বাংলাদেশের প্রধানমন্ত্রী">
+      <label for="x">তথ্য</label>
+      <textarea id="x" maxlength="1200" placeholder="যেমন: তারেক রহমান ১৭ ফেব্রুয়ারি ২০২৬ থেকে বাংলাদেশের প্রধানমন্ত্রী।" required></textarea>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="saveBtn" type="submit">সেভ করো</button>
+        <button type="button" id="cancelBtn" class="hidden">বাতিল</button>
+        <span class="count" id="entryBytes"></span>
+      </div>
+      <div class="msg" id="formMsg"></div>
+    </form>
+
+    <div class="card">
+      <input id="q" placeholder="তথ্য খুঁজুন...">
+      <div id="list" style="margin-top:8px"></div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+  import { getDatabase, ref, onValue, push, set, remove }
+    from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyATczBXkLVCVpaje7ejU-_rYPbSJx7LHOY",
+    authDomain: "getespform.firebaseapp.com",
+    databaseURL: "https://getespform-default-rtdb.firebaseio.com",
+    projectId: "getespform",
+    storageBucket: "getespform.firebasestorage.app",
+    messagingSenderId: "746315429668",
+    appId: "1:746315429668:web:5b57917675277642ee25b1"
+  };
+  const MAX_BYTES = 8000; // firmware (knowledge_base.h) এর kMaxBytes এর সাথে এক থাকতে হবে
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getDatabase(app);
+  const $ = (id) => document.getElementById(id);
+  const enc = new TextEncoder();
+  const bytes = (s) => enc.encode(s).length;
+  // firmware যে লাইন বানায়: "- শিরোনাম: তথ্য\n"
+  const lineBytes = (t, x) => 2 + (t ? bytes(t) + 2 : 0) + bytes(x) + 1;
+
+  let entries = [];     // [{id, t, x}]
+  let editingId = null;
+  let unsub = null;
+
+  function setMsg(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  function niceError(e) {
+    const c = (e && e.code) || "";
+    if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") || c.includes("invalid-email"))
+      return "ইমেইল বা পাসওয়ার্ড ভুল।";
+    if (c.includes("too-many-requests")) return "অনেকবার ভুল হয়েছে, কিছুক্ষণ পরে আবার চেষ্টা করো।";
+    if (c.includes("network")) return "ইন্টারনেট সংযোগ নেই।";
+    if ((e && e.message || "").toLowerCase().includes("permission_denied") || c.includes("permission"))
+      return "অনুমতি নেই। Firebase Rules এ এই অ্যাকাউন্টকে /knowledge এ লেখার অনুমতি দাও।";
+    return "সমস্যা হয়েছে: " + (e && e.message ? e.message : e);
+  }
+
+  // ---------- লগইন ----------
+  $("loginForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    $("loginBtn").disabled = true; setMsg($("loginMsg"), "লগইন হচ্ছে...");
+    try {
+      await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
+      setMsg($("loginMsg"), "");
+    } catch (e) { setMsg($("loginMsg"), niceError(e), "err"); }
+    $("loginBtn").disabled = false;
+  });
+  $("logoutBtn").addEventListener("click", () => signOut(auth));
+
+  onAuthStateChanged(auth, (user) => {
+    if (unsub) { unsub(); unsub = null; }
+    if (!user) {
+      $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden");
+      entries = []; return;
+    }
+    $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
+    $("who").textContent = user.email;
+    unsub = onValue(ref(db, "knowledge"), (snap) => {
+      const v = snap.val() || {};
+      entries = Object.keys(v).sort().map((id) => ({ id, t: v[id].t || "", x: v[id].x || "" }));
+      render();
+    }, (e) => setMsg($("formMsg"), niceError(e), "err"));
+  });
+
+  // ---------- রেন্ডার ----------
+  function totalBytes(skipId) {
+    return entries.reduce((n, e) => n + (e.id === skipId ? 0 : lineBytes(e.t, e.x)), 0);
+  }
+
+  function render() {
+    const used = totalBytes();
+    $("usedText").textContent = used + " / " + MAX_BYTES + " বাইট";
+    $("countText").textContent = entries.length + "টি তথ্য";
+    const meter = $("meter");
+    meter.className = "meter" + (used > MAX_BYTES ? " full" : used > MAX_BYTES * 0.8 ? " warn" : "");
+    meter.firstElementChild.style.width = Math.min(100, (used / MAX_BYTES) * 100) + "%";
+
+    const q = $("q").value.trim().toLowerCase();
+    const list = $("list"); list.textContent = "";
+    const shown = entries.filter((e) => !q || (e.t + " " + e.x).toLowerCase().includes(q));
+    if (!shown.length) {
+      const d = document.createElement("div"); d.className = "empty";
+      d.textContent = entries.length ? "কিছু পাওয়া যায়নি।" : "এখনো কোনো তথ্য নেই। উপরে প্রথমটা যোগ করো।";
+      list.appendChild(d); return;
+    }
+    for (const e of shown) {
+      const box = document.createElement("div"); box.className = "entry";
+      if (e.t) { const h = document.createElement("h3"); h.textContent = e.t; box.appendChild(h); }
+      const p = document.createElement("p"); p.textContent = e.x; box.appendChild(p);
+      const row = document.createElement("div"); row.className = "row";
+      const b = document.createElement("span"); b.className = "bytes grow"; b.textContent = lineBytes(e.t, e.x) + " বাইট";
+      const ed = document.createElement("button"); ed.className = "small"; ed.textContent = "এডিট";
+      ed.onclick = () => startEdit(e);
+      const del = document.createElement("button"); del.className = "small danger"; del.textContent = "মুছুন";
+      del.onclick = () => removeEntry(e);
+      row.append(b, ed, del); box.appendChild(row); list.appendChild(box);
+    }
+  }
+  $("q").addEventListener("input", render);
+
+  // ---------- যোগ / এডিট / মোছা ----------
+  function updateEntryBytes() {
+    const t = $("t").value.trim(), x = $("x").value.trim();
+    $("entryBytes").textContent = x ? "এই তথ্য: " + lineBytes(t, x) + " বাইট" : "";
+  }
+  $("t").addEventListener("input", updateEntryBytes);
+  $("x").addEventListener("input", updateEntryBytes);
+
+  function startEdit(e) {
+    editingId = e.id; $("t").value = e.t; $("x").value = e.x;
+    $("formTitle").textContent = "তথ্য এডিট করো"; $("cancelBtn").classList.remove("hidden");
+    updateEntryBytes(); window.scrollTo({ top: 0, behavior: "smooth" }); $("x").focus();
+  }
+  function resetForm() {
+    editingId = null; $("t").value = ""; $("x").value = ""; $("entryBytes").textContent = "";
+    $("formTitle").textContent = "নতুন তথ্য যোগ করো"; $("cancelBtn").classList.add("hidden");
+  }
+  $("cancelBtn").addEventListener("click", () => { resetForm(); setMsg($("formMsg"), ""); });
+
+  $("entryForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const t = $("t").value.trim(), x = $("x").value.trim();
+    if (!x) return;
+    if (totalBytes(editingId) + lineBytes(t, x) > MAX_BYTES) {
+      setMsg($("formMsg"), "সীমা (" + MAX_BYTES + " বাইট) পেরিয়ে যাবে। আগে কিছু মুছো বা তথ্য ছোট করো।", "err"); return;
+    }
+    $("saveBtn").disabled = true; setMsg($("formMsg"), "সেভ হচ্ছে...");
+    try {
+      if (editingId) await set(ref(db, "knowledge/" + editingId), { t, x });
+      else await set(push(ref(db, "knowledge")), { t, x });
+      resetForm(); setMsg($("formMsg"), "সেভ হয়েছে। AI পরের প্রশ্ন থেকেই নতুন তথ্য পাবে।", "ok");
+    } catch (e) { setMsg($("formMsg"), niceError(e), "err"); }
+    $("saveBtn").disabled = false;
+  });
+
+  async function removeEntry(e) {
+    if (!confirm("এই তথ্য মুছে ফেলবে?\n\n" + (e.t || e.x).slice(0, 80))) return;
+    try { await remove(ref(db, "knowledge/" + e.id)); if (editingId === e.id) resetForm(); }
+    catch (err) { setMsg($("formMsg"), niceError(err), "err"); }
+  }
+</script>
+</body>
+</html>
