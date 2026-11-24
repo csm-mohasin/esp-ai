@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Knowledge Admin</title>
+<title>AI Admin</title>
 <style>
   :root {
     --bg: #f4f6fa; --card: #ffffff; --ink: #151a24; --muted: #66708a; --line: #dde2ee;
@@ -65,6 +65,11 @@
   .empty { color: var(--muted); text-align: center; padding: 24px 0; }
   .hidden { display: none !important; }
   .count { color: var(--muted); font-size: 14px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tab { flex: 1; padding: 10px; text-align: center; }
+  .tab.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .url { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; margin: 0 0 8px; }
+  audio { width: 100%; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -90,6 +95,12 @@
       <button class="small" id="logoutBtn" type="button">লগআউট</button>
     </div>
 
+    <div class="tabs">
+      <button type="button" class="tab on" id="tabKb">তথ্য (Knowledge)</button>
+      <button type="button" class="tab" id="tabMusic">মিউজিক</button>
+    </div>
+
+    <div id="kbPane">
     <div class="card">
       <div class="stats"><span id="usedText">0 / 8000 বাইট</span><span id="countText">0টি তথ্য</span></div>
       <div class="meter" id="meter"><i></i></div>
@@ -113,6 +124,30 @@
     <div class="card">
       <input id="q" placeholder="তথ্য খুঁজুন...">
       <div id="list" style="margin-top:8px"></div>
+    </div>
+    </div>
+
+    <!-- মিউজিক -->
+    <div id="musicPane" class="hidden">
+      <form class="card" id="musicForm">
+        <h2 style="font-size:17px;margin:0 0 4px" id="musicFormTitle">নতুন গান যোগ করো</h2>
+        <div class="sub">AI এই নামে গান খুঁজবে। নামে . # $ [ ] / ব্যবহার করা যাবে না।</div>
+        <label for="mname">গানের নাম</label>
+        <input id="mname" maxlength="60" placeholder="যেমন: Happy Song" required>
+        <label for="murl">গানের লিংক (Ogg Opus ফাইল, https)</label>
+        <input id="murl" type="url" placeholder="https://raw.githubusercontent.com/ইউজার/repo/main/song.ogg" required>
+        <div class="row" style="margin-top:12px">
+          <button class="primary" id="mSaveBtn" type="submit">সেভ করো</button>
+          <button type="button" id="mTestBtn">টেস্ট শোনো</button>
+          <button type="button" id="mCancelBtn" class="hidden">বাতিল</button>
+        </div>
+        <audio id="player" controls class="hidden"></audio>
+        <div class="msg" id="musicMsg"></div>
+      </form>
+      <div class="card">
+        <div class="stats"><span id="musicCount">0টি গান</span></div>
+        <div id="musicList" style="margin-top:8px"></div>
+      </div>
     </div>
   </section>
 </div>
@@ -147,6 +182,7 @@
   let entries = [];     // [{id, t, x}]
   let editingId = null;
   let unsub = null;
+  let unsubMusic = null;
 
   function setMsg(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
 
@@ -175,6 +211,7 @@
 
   onAuthStateChanged(auth, (user) => {
     if (unsub) { unsub(); unsub = null; }
+    if (unsubMusic) { unsubMusic(); unsubMusic = null; }
     if (!user) {
       $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden");
       entries = []; return;
@@ -186,6 +223,11 @@
       entries = Object.keys(v).sort().map((id) => ({ id, t: v[id].t || "", x: v[id].x || "" }));
       render();
     }, (e) => setMsg($("formMsg"), niceError(e), "err"));
+    unsubMusic = onValue(ref(db, "music"), (snap) => {
+      const v = snap.val() || {};
+      songs = Object.keys(v).sort().map((name) => ({ name, url: String(v[name]) }));
+      renderSongs();
+    }, (e) => setMsg($("musicMsg"), niceError(e), "err"));
   });
 
   // ---------- রেন্ডার ----------
@@ -264,6 +306,101 @@
     try { await remove(ref(db, "knowledge/" + e.id)); if (editingId === e.id) resetForm(); }
     catch (err) { setMsg($("formMsg"), niceError(err), "err"); }
   }
+
+  // ---------- ট্যাব ----------
+  function showTab(which) {
+    const music = which === "music";
+    $("kbPane").classList.toggle("hidden", music);
+    $("musicPane").classList.toggle("hidden", !music);
+    $("tabKb").classList.toggle("on", !music);
+    $("tabMusic").classList.toggle("on", music);
+  }
+  $("tabKb").addEventListener("click", () => showTab("kb"));
+  $("tabMusic").addEventListener("click", () => showTab("music"));
+
+  // ---------- মিউজিক ----------
+  let songs = [];            // [{name, url}]
+  let editingSong = null;    // পুরনো নাম (এডিটের সময়)
+  const BAD_NAME = /[.#$\[\]\/\u0000-\u001f]/;
+
+  function checkSong(name, url) {
+    if (!name) return "গানের নাম দাও।";
+    if (BAD_NAME.test(name)) return "নামে . # $ [ ] / ব্যবহার করা যাবে না।";
+    if (!/^https:\/\//i.test(url)) return "লিংক https:// দিয়ে শুরু হতে হবে।";
+    if (/^https:\/\/github\.com\//i.test(url))
+      return "github.com লিংক কাজ করে না (রিডাইরেক্ট করে)। raw.githubusercontent.com লিংক দাও।";
+    return "";
+  }
+
+  function stopPlayer() {
+    const p = $("player"); p.pause(); p.removeAttribute("src"); p.load(); p.classList.add("hidden");
+  }
+  function playTest(url) {
+    const p = $("player"); setMsg($("musicMsg"), "লোড হচ্ছে...");
+    p.classList.remove("hidden"); p.src = url;
+    p.onerror = () => setMsg($("musicMsg"), "ব্রাউজারে বাজেনি। লিংক ঠিক আছে কিনা বা ফাইল Ogg Opus কিনা দেখো।", "err");
+    p.onplaying = () => setMsg($("musicMsg"), "বাজছে। ব্রাউজারে বাজলেও ডিভাইসে ফরম্যাট (মনো, Opus) ঠিক থাকা জরুরি।", "ok");
+    p.play().catch(() => {});
+  }
+  $("mTestBtn").addEventListener("click", () => {
+    const url = $("murl").value.trim();
+    if (!/^https:\/\//i.test(url)) { setMsg($("musicMsg"), "আগে https:// লিংক দাও।", "err"); return; }
+    playTest(url);
+  });
+
+  function renderSongs() {
+    $("musicCount").textContent = songs.length + "টি গান";
+    const list = $("musicList"); list.textContent = "";
+    if (!songs.length) {
+      const d = document.createElement("div"); d.className = "empty";
+      d.textContent = "এখনো কোনো গান নেই। উপরে প্রথমটা যোগ করো."; list.appendChild(d); return;
+    }
+    for (const sg of songs) {
+      const box = document.createElement("div"); box.className = "entry";
+      const h = document.createElement("h3"); h.textContent = sg.name; box.appendChild(h);
+      const u = document.createElement("p"); u.className = "url"; u.textContent = sg.url; box.appendChild(u);
+      const row = document.createElement("div"); row.className = "row";
+      const sp = document.createElement("span"); sp.className = "grow"; row.appendChild(sp);
+      const pl = document.createElement("button"); pl.className = "small"; pl.textContent = "শোনো";
+      pl.onclick = () => { $("musicForm").scrollIntoView({ behavior: "smooth" }); playTest(sg.url); };
+      const ed = document.createElement("button"); ed.className = "small"; ed.textContent = "এডিট";
+      ed.onclick = () => {
+        editingSong = sg.name; $("mname").value = sg.name; $("murl").value = sg.url;
+        $("musicFormTitle").textContent = "গান এডিট করো"; $("mCancelBtn").classList.remove("hidden");
+        $("musicForm").scrollIntoView({ behavior: "smooth" }); $("mname").focus();
+      };
+      const del = document.createElement("button"); del.className = "small danger"; del.textContent = "মুছুন";
+      del.onclick = async () => {
+        if (!confirm("এই গান মুছে ফেলবে?\n\n" + sg.name)) return;
+        try { await remove(ref(db, "music/" + sg.name)); if (editingSong === sg.name) resetMusicForm(); }
+        catch (e) { setMsg($("musicMsg"), niceError(e), "err"); }
+      };
+      row.append(pl, ed, del); box.appendChild(row); list.appendChild(box);
+    }
+  }
+
+  function resetMusicForm() {
+    editingSong = null; $("mname").value = ""; $("murl").value = "";
+    $("musicFormTitle").textContent = "নতুন গান যোগ করো"; $("mCancelBtn").classList.add("hidden"); stopPlayer();
+  }
+  $("mCancelBtn").addEventListener("click", () => { resetMusicForm(); setMsg($("musicMsg"), ""); });
+
+  $("musicForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = $("mname").value.trim(), url = $("murl").value.trim();
+    const bad = checkSong(name, url);
+    if (bad) { setMsg($("musicMsg"), bad, "err"); return; }
+    if (name !== editingSong && songs.some((s) => s.name === name) &&
+        !confirm("এই নামে গান আছে। বদলে দেবে?")) return;
+    $("mSaveBtn").disabled = true; setMsg($("musicMsg"), "সেভ হচ্ছে...");
+    try {
+      await set(ref(db, "music/" + name), url);
+      if (editingSong && editingSong !== name) await remove(ref(db, "music/" + editingSong));  // নাম বদলালে পুরনোটা মোছা
+      resetMusicForm();
+      setMsg($("musicMsg"), "সেভ হয়েছে। AI পরের অনুরোধ থেকেই এই গান পাবে।", "ok");
+    } catch (e) { setMsg($("musicMsg"), niceError(e), "err"); }
+    $("mSaveBtn").disabled = false;
+  });
 </script>
 </body>
 </html>
