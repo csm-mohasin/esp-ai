@@ -6,9 +6,24 @@
 <meta name="robots" content="noindex">
 <title>Guest Access</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f17;color:#e8edf5;font-family:system-ui;text-align:center;padding:16px}</style>
+<style>
+#loader{position:fixed;inset:0;z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:16px;text-align:center;color:#e0f2fe;font-family:Outfit,system-ui,sans-serif;background:radial-gradient(circle at 50% 40%,#10233f,#05070d 70%);transition:opacity .4s}
+.orb{position:relative;width:130px;height:130px}
+.orb i{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:#22d3ee;border-bottom-color:#22d3ee33;animation:spin 1.4s linear infinite}
+.orb i:nth-child(2){inset:16px;border-top-color:#a78bfa;animation-duration:1s;animation-direction:reverse}
+.orb i:nth-child(3){inset:42px;border:0;background:#22d3ee;box-shadow:0 0 35px #22d3ee;animation:pulse 1.2s ease-in-out infinite}
+#loader h2{margin:0;font-size:1.15rem;font-weight:500;animation:fade 1.6s ease-in-out infinite}
+.track{width:220px;height:4px;border-radius:9px;background:#ffffff1a;overflow:hidden}
+.track b{display:block;width:40%;height:100%;border-radius:9px;background:linear-gradient(90deg,#22d3ee,#a78bfa);animation:slide 1.2s ease-in-out infinite}
+#loader small{color:#7890aa;font-size:.75rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{transform:scale(.65);opacity:.6}}
+@keyframes fade{50%{opacity:.55}}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+</style>
 </head>
 <body>
-<div id="msg">Access তৈরি হচ্ছে...</div>
+<div id="loader"><div class="orb"><i></i><i></i><i></i></div><h2 id="msg">Generating your access on server</h2><div class="track"><b></b></div><small>MAHI Ai | Design and Developed by CSM Mohasin Alam</small></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { signInAnonymously, inMemoryPersistence, browserLocalPersistence, initializeAuth } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
@@ -26,6 +41,7 @@ const auth = initializeAuth(app, { persistence: [browserLocalPersistence, inMemo
 const db = getDatabase(app);
 
 try {
+  await new Promise(r => setTimeout(r, 1800));
   await auth.authStateReady();
   const user = auth.currentUser || (await signInAnonymously(auth)).user;
   const token = [...crypto.getRandomValues(new Uint8Array(16))]
