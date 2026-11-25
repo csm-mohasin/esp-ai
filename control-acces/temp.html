@@ -1232,7 +1232,7 @@ async function waitApproval(token){
   const code = req ? req.code : 10 + crypto.getRandomValues(new Uint8Array(1))[0] % 90;
   if(!req){
     await set(r, {uid:auth.currentUser.uid, code, t:serverTimestamp()});
-    fetch("https://mahiuser.csm-mohasin.workers.dev/notify", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id:token})}).catch(()=>{});
+    fetch("https://mahii.csm-mohasin.workers.dev/notify", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id:token})}).catch(()=>{});
   }
   const pending = onDisconnect(r);
   if(!req || !req.status) await pending.remove();
