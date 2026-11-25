@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Relay Control</title>
+<style>
+body{margin:0;background:#0b0f17;color:#e8edf5;font-family:system-ui;text-align:center;padding:24px 16px}
+main{max-width:360px;margin:auto}
+#time{font-size:48px;font-weight:700;margin:8px 0 20px}
+#grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{padding:28px 8px;font-size:18px;border:0;border-radius:16px;background:#1d2636;color:inherit}
+button.on{background:#16a34a}
+button:disabled{opacity:.4}
+</style>
+</head>
+<body>
+<main>
+<h2>Relay Control</h2>
+<div id="time">--</div>
+<div id="grid"></div>
+<p id="msg">যাচাই হচ্ছে...</p>
+</main>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { initializeAuth, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyATczBXkLVCVpaje7ejU-_rYPbSJx7LHOY",
+  authDomain: "getespform.firebaseapp.com",
+  databaseURL: "https://getespform-default-rtdb.firebaseio.com",
+  projectId: "getespform",
+  appId: "1:746315429668:web:5b57917675277642ee25b1"
+}, "guest");
+const auth = initializeAuth(app, { persistence: [browserLocalPersistence, inMemoryPersistence] });
+const db = getDatabase(app);
+const $ = id => document.getElementById(id);
+const token = location.search.slice(1);
+let offset = 0, stops = [], timer;
+
+const buttons = [1,2,3,4].map(n => {
+  const b = document.createElement("button");
+  b.textContent = "Relay " + n;
+  b.disabled = true;
+  b.onclick = () => set(ref(db, "relayControl/relay" + n), !b.classList.contains("on"))
+    .catch(e => $("msg").textContent = "হয়নি: " + (e.code || e.message));
+  $("grid").appendChild(b);
+  return b;
+});
+
+function end(text) {
+  clearInterval(timer);
+  stops.forEach(s => s());
+  buttons.forEach(b => b.disabled = true);
+  $("time").textContent = "0";
+  $("msg").textContent = text;
+}
+
+try {
+  if (!/^[0-9a-f]{32}$/.test(token)) throw 0;
+  await auth.authStateReady();
+  if (!auth.currentUser) throw 0;
+  stops.push(onValue(ref(db, ".info/serverTimeOffset"), s => offset = s.val() || 0));
+  const data = (await get(ref(db, "token/" + token))).val();
+  if (!data) throw 0;
+
+  const tick = () => {
+    const left = Math.ceil((data.t + 60000 - Date.now() - offset) / 1000);
+    if (left <= 0) { end("সময় শেষ। আবার QR scan করুন।"); return false; }
+    $("time").textContent = Math.min(left, 60);
+    return true;
+  };
+  if (tick()) {
+    timer = setInterval(tick, 250);
+    $("msg").textContent = "";
+    buttons.forEach((b, i) => {
+      b.disabled = false;
+      stops.push(onValue(ref(db, "relayControl/relay" + (i + 1)),
+        s => b.classList.toggle("on", s.val() === true)));
+    });
+  }
+} catch (e) {
+  end("Link সঠিক নয়। আবার QR scan করুন।");
+}
+</script>
+</body>
+</html>

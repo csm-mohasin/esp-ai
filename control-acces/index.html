@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Guest Access</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f17;color:#e8edf5;font-family:system-ui;text-align:center;padding:16px}</style>
+</head>
+<body>
+<div id="msg">Access তৈরি হচ্ছে...</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { signInAnonymously, inMemoryPersistence, browserLocalPersistence, initializeAuth } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import { getDatabase, ref, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+// "guest" নামে আলাদা app, তাই owner-এর login নষ্ট হবে না
+const app = initializeApp({
+  apiKey: "AIzaSyATczBXkLVCVpaje7ejU-_rYPbSJx7LHOY",
+  authDomain: "getespform.firebaseapp.com",
+  databaseURL: "https://getespform-default-rtdb.firebaseio.com",
+  projectId: "getespform",
+  appId: "1:746315429668:web:5b57917675277642ee25b1"
+}, "guest");
+const auth = initializeAuth(app, { persistence: [browserLocalPersistence, inMemoryPersistence] });
+const db = getDatabase(app);
+
+try {
+  await auth.authStateReady();
+  const user = auth.currentUser || (await signInAnonymously(auth)).user;
+  const token = [...crypto.getRandomValues(new Uint8Array(16))]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+  await set(ref(db, "token/" + token), { uid: user.uid, t: serverTimestamp() });
+  await set(ref(db, "guest/" + user.uid), token);
+  location.replace("temp?" + token);
+} catch (e) {
+  document.getElementById("msg").textContent = "Access পাওয়া যায়নি: " + (e.code || e.message);
+}
+</script>
+</body>
+</html>
