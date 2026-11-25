@@ -44,11 +44,11 @@ try {
   await new Promise(r => setTimeout(r, 1800));
   await auth.authStateReady();
   const user = auth.currentUser || (await signInAnonymously(auth)).user;
-  const token = [...crypto.getRandomValues(new Uint8Array(16))]
-    .map(b => b.toString(16).padStart(2, "0")).join("");
+  const token = [...crypto.getRandomValues(new Uint8Array(32))]
+    .map(b => b % 10).join("");
   await set(ref(db, "token/" + token), { uid: user.uid, t: serverTimestamp() });
   await set(ref(db, "guest/" + user.uid), token);
-  location.replace("temp?" + token);
+  location.replace("temp?acces.key=CSM." + token);
 } catch (e) {
   document.getElementById("msg").textContent = "Access পাওয়া যায়নি: " + (e.code || e.message);
 }

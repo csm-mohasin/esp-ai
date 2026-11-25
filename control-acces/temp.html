@@ -809,7 +809,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/fireba
 import { initializeAuth, browserLocalPersistence, inMemoryPersistence }
   from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { getDatabase, ref, onValue, set, update, remove, push, query,
-         limitToLast, limitToFirst, orderByKey, startAt, endAt, get }
+         limitToLast, limitToFirst, orderByKey, startAt, endAt, get,
+         serverTimestamp, onDisconnect }
   from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -1224,17 +1225,43 @@ function block(){
   document.body.innerHTML = '<div style="position:fixed;inset:0;z-index:99999;background:#b91c1c;color:#fff;display:flex;flex-direction:column;text-align:center;padding:16px"><div style="margin:auto"><div style="font-size:64px">⚠️</div><h1 style="margin:12px 0">Access Blocked</h1><p>সময় শেষ অথবা লিংকটি সঠিক নয়। আবার QR কোড স্ক্যান করুন।</p></div><footer style="color:#fff;font-size:13px">MAHI Ai | Design and Developed by CSM Mohasin Alam</footer></div>';
 }
 
+/* Admin approval er jonno opekkha */
+async function waitApproval(token){
+  const r = ref(db,"requests/"+token);
+  let req = (await get(r)).val();
+  const code = req ? req.code : 10 + crypto.getRandomValues(new Uint8Array(1))[0] % 90;
+  if(!req){
+    await set(r, {uid:auth.currentUser.uid, code, t:serverTimestamp()});
+    fetch("https://mahiuser.csm-mohasin.workers.dev/notify", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id:token})}).catch(()=>{});
+  }
+  const pending = onDisconnect(r);
+  if(!req || !req.status) await pending.remove();
+  $("msg").innerHTML = "অ্যাডমিনের অনুমতির অপেক্ষা...<br>আপনার কোড: <b style='font-size:2rem'>" + code + "</b>";
+  return new Promise((resolve, reject)=>{
+    unsubs.push(onValue(r, s=>{
+      const v = s.val();
+      if(v && v.status === "allow" && v.at){ pending.cancel(); resolve(v.at); }
+      else if(v && v.status === "deny"){ pending.cancel(); resolve(0); }
+    }, reject));
+  });
+}
+
 async function startGuest(){
   await new Promise(r=>setTimeout(r,1500));
-  const token = location.search.slice(1);
-  if(!/^[0-9a-f]{32}$/.test(token)) return block();
+  const token = (location.search.match(/^\?acces\.key=CSM\.(\d{32})$/) || [])[1];
+  if(!token) return block();
   await auth.authStateReady();
   if(!auth.currentUser) return block();
   let offset = 0;
   onValue(ref(db,".info/serverTimeOffset"), s=> offset = s.val() || 0);
   const data = (await get(ref(db,"token/"+token))).val();
   if(!data || data.uid !== auth.currentUser.uid) return block();
-  const left = ()=> Math.ceil((data.t + 60000 - Date.now() - offset)/1000);
+  let start = data.t;
+  if((await get(ref(db,"settings/approval"))).val() === true){
+    start = await waitApproval(token);
+    if(!start) return block();
+  }
+  const left = ()=> Math.ceil((start + 60000 - Date.now() - offset)/1000);
   if(left() <= 0) return block();
 
   $("dash").style.display = "block";
