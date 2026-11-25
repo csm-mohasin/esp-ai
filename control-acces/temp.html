@@ -141,8 +141,33 @@
   .rdp-sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap }
   @media (prefers-reduced-motion:reduce){ .rdp-colon{ animation:none } .rdp-ampm{ transition:none } }
 </style>
+<style>
+#loader{position:fixed;inset:0;z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:16px;text-align:center;color:#e0f2fe;font-family:Outfit,system-ui,sans-serif;background:radial-gradient(circle at 50% 40%,#10233f,#05070d 70%);transition:opacity .4s}
+.orb{position:relative;width:130px;height:130px}
+.orb i{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:#22d3ee;border-bottom-color:#22d3ee33;animation:spin 1.4s linear infinite}
+.orb i:nth-child(2){inset:16px;border-top-color:#a78bfa;animation-duration:1s;animation-direction:reverse}
+.orb i:nth-child(3){inset:42px;border:0;background:#22d3ee;box-shadow:0 0 35px #22d3ee;animation:pulse 1.2s ease-in-out infinite}
+#loader h2{margin:0;font-size:1.15rem;font-weight:500;animation:fade 1.6s ease-in-out infinite}
+.track{width:220px;height:4px;border-radius:9px;background:#ffffff1a;overflow:hidden}
+.track b{display:block;width:40%;height:100%;border-radius:9px;background:linear-gradient(90deg,#22d3ee,#a78bfa);animation:slide 1.2s ease-in-out infinite}
+#loader small{color:#7890aa;font-size:.75rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{transform:scale(.65);opacity:.6}}
+@keyframes fade{50%{opacity:.55}}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+</style>
+<style>
+#timeBox{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:9999;display:none;align-items:center;gap:12px;white-space:nowrap;padding:8px 20px 8px 8px;border-radius:99px;background:#0b1220ee;color:#fff;border:1px solid #22d3ee66;box-shadow:0 8px 30px #0008,0 0 20px #22d3ee33;animation:up .5s ease-out}
+#ring{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) var(--p),#ffffff1f 0)}
+#ring b{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#0b1220}
+#timeBox.low{border-color:#ef4444;animation:beat .8s infinite}
+#dash{padding-bottom:80px}
+@keyframes up{from{opacity:0;transform:translate(-50%,40px)}}
+@keyframes beat{50%{box-shadow:0 0 28px #ef4444}}
+</style>
 </head>
 <body>
+<div id="loader"><div class="orb"><i></i><i></i><i></i></div><h2 id="msg">Checking your access...</h2><div class="track"><b></b></div><small>MAHI Ai | Design and Developed by CSM Mohasin Alam</small></div>
 <div class="wrap">
 
   <!-- DASHBOARD -->
@@ -238,7 +263,7 @@
       <div id="devInfo" class="sub" style="margin-bottom:0"></div>
     </section>
 
-    <footer>Developer: CSM Mohasin Alam</footer>
+    <footer>MAHI Ai | Design and Developed by CSM Mohasin Alam</footer>
   </div>
 </div>
 
@@ -1187,8 +1212,8 @@ onValue(ref(db,".info/connected"), snap=>{
 
 /* ================= Guest access (1 minute) ================= */
 const timeBox = document.createElement("div");
-timeBox.style.cssText = "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#111827;color:#fff;border:1px solid #fff3;border-radius:99px;padding:10px 20px;font-weight:600;white-space:nowrap";
-timeBox.textContent = "Access check hocche...";
+timeBox.id = "timeBox";
+timeBox.innerHTML = '<div id="ring"><b id="num"></b></div><span>You have access for <strong id="sec"></strong> seconds</span>';
 document.body.appendChild(timeBox);
 $("dash").style.display = "none";
 let timer;
@@ -1196,10 +1221,11 @@ let timer;
 function block(){
   clearInterval(timer);
   unsubs.forEach(u=>u()); unsubs=[];
-  document.body.innerHTML = '<div style="min-height:80vh;display:grid;place-content:center;text-align:center;padding:16px"><h2>Access Blocked</h2><p>Somoy sesh ba link thik noy. Abar QR scan korun.</p></div>';
+  document.body.innerHTML = '<div style="position:fixed;inset:0;z-index:99999;background:#b91c1c;color:#fff;display:flex;flex-direction:column;text-align:center;padding:16px"><div style="margin:auto"><div style="font-size:64px">⚠️</div><h1 style="margin:12px 0">Access Blocked</h1><p>সময় শেষ অথবা লিংকটি সঠিক নয়। আবার QR কোড স্ক্যান করুন।</p></div><footer style="color:#fff;font-size:13px">MAHI Ai | Design and Developed by CSM Mohasin Alam</footer></div>';
 }
 
 async function startGuest(){
+  await new Promise(r=>setTimeout(r,1500));
   const token = location.search.slice(1);
   if(!/^[0-9a-f]{32}$/.test(token)) return block();
   await auth.authStateReady();
@@ -1213,9 +1239,16 @@ async function startGuest(){
 
   $("dash").style.display = "block";
   $("logoutBtn").remove();
+  $("loader").remove();
+  timeBox.style.display = "flex";
   const tick = ()=>{
     if(left() <= 0) return block();
-    timeBox.textContent = "Somoy baki: " + Math.min(left(),60) + "s";
+    const n = Math.max(0, Math.min(left(),60));
+    $("num").textContent = n;
+    $("sec").textContent = n;
+    $("ring").style.setProperty("--p", (n/60*100)+"%");
+    $("ring").style.setProperty("--c", n <= 10 ? "#ef4444" : "#22d3ee");
+    timeBox.classList.toggle("low", n <= 10);
   };
   tick();
   timer = setInterval(tick, 250);
