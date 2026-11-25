@@ -1232,7 +1232,7 @@ async function waitApproval(token){
   const code = req ? req.code : 10 + crypto.getRandomValues(new Uint8Array(1))[0] % 90;
   if(!req){
     await set(r, {uid:auth.currentUser.uid, code, t:serverTimestamp()});
-    fetch("https://mahii.csm-mohasin.workers.dev/notify", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id:token})}).catch(()=>{});
+    fetch("https://mahiii.csm-mohasin.workers.dev/notify", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id:token})}).catch(()=>{});
   }
   const pending = onDisconnect(r);
   if(!req || !req.status) await pending.remove();
@@ -1246,6 +1246,17 @@ async function waitApproval(token){
   });
 }
 
+/* Instant Telegram notification */
+let pingTimer;
+function ping(){
+  clearTimeout(pingTimer);
+  pingTimer = setTimeout(()=> fetch("https://mahiii.csm-mohasin.workers.dev/sync", {method:"POST", keepalive:true}).catch(()=>{}), 700);
+}
+function watchForPing(){
+  ["relayControl","schedules","presets","settings"].forEach(p=> unsubs.push(onValue(ref(db,p), ping)));
+  unsubs.push(onValue(query(ref(db,"activityLog"), limitToLast(1)), ping));
+}
+
 async function startGuest(){
   await new Promise(r=>setTimeout(r,1500));
   const token = (location.search.match(/^\?acces\.key=CSM\.(\d{32})$/) || [])[1];
@@ -1254,6 +1265,7 @@ async function startGuest(){
   if(!auth.currentUser) return block();
   let offset = 0;
   onValue(ref(db,".info/serverTimeOffset"), s=> offset = s.val() || 0);
+  ping();
   const data = (await get(ref(db,"token/"+token))).val();
   if(!data || data.uid !== auth.currentUser.uid) return block();
   let start = data.t;
@@ -1266,6 +1278,7 @@ async function startGuest(){
 
   $("dash").style.display = "block";
   $("logoutBtn").remove();
+  watchForPing();
   $("loader").remove();
   timeBox.style.display = "flex";
   const tick = ()=>{
